@@ -30,6 +30,9 @@ def extract_ckpt_path(directory):
                                 corruption_flags.append('--corrupt_reward')
                             if config.get('corrupt_dynamics', True):
                                 corruption_flags.append('--corrupt_dynamics')
+                                corrupt_dynamics = True
+                            else:
+                                corrupt_dynamics = False
                             if config.get('corrupt_acts', True):
                                 corruption_flags.append('--corrupt_acts')
                             if config.get('corrupt_obs', True):
@@ -44,7 +47,6 @@ def extract_ckpt_path(directory):
                                 deterministic_policy = False
                     except Exception as e:
                         print(f"Error reading JSON file {json_file}: {e}")
-                
                 turple = [grandparent_dir, ckpt_path, corruption_flags[0]]
                 if normalize_states:
                     turple.append('--normalize_states')
@@ -55,26 +57,29 @@ def extract_ckpt_path(directory):
                 else:
                     turple.append(' ')
                 if "medium-replay-v2" in grandparent_dir:
-                    ckpt_info.append(tuple(turple))
+                    if not corrupt_dynamics:
+                        ckpt_info.append(tuple(turple))
     return ckpt_info
 
 
 
 riql_attack = extract_ckpt_path('./riql_offline_results/stochastic_norm')
 
-
+# print(riql_attack)
+# print(len(riql_attack))
 # sweep parameters
 seeds = np.random.randint(0, 10000, size=3) 
-kappas = [0.1,0.3,1]
+kappas = [0.1,0.3]
 corrupt_list = [(1.0,0.3)]
-invs = [3,10,100]
+invs = [3,10]
 
 
 # RPEX
 rpex_commands = [["python3", f"attack_online.py", f"--algorithm=rpex", f"--env_name={env}",f"{normalize_states}", \
-    f"--kappa={kappa}",f"--seed={seed}",f"{corruption_flag}",f"--log_dir=attack_online_results/rpex",f"--ckpt_path={ckpt_path}", \
+    f"--kappa={kappa}",f"--seed={seed}",f"--inv_temperature={inv}",f"{corruption_flag}",f"--log_dir=attack_online_results/rpex",f"--ckpt_path={ckpt_path}", \
         f"--corruption_range={ranges}",f"--corruption_rate={rate}"] 
-    for seed in seeds  for env, ckpt_path,corruption_flag,normalize_states,_ in riql_attack for ranges,rate in corrupt_list for kappa in kappas]
+    for seed in seeds  for env, ckpt_path,corruption_flag,normalize_states,_ in riql_attack  \
+        for ranges,rate in corrupt_list for kappa in kappas for inv in invs]
 
 
 # RIQL_PEX
@@ -92,11 +97,11 @@ f"--seed={seed}",f"{corruption_flag}",f"--log_dir=attack_online_results/rpex",f"
 
 
 # Combine all commands
-commands = riql_pex_commands + riql_direct_commands + rpex_commands
+commands = rpex_commands
 
 
 for i,command in enumerate(commands):
-    commands[i] = command + [f"--device_number={i%2}"]
+    commands[i] = command + [f"--device_number={0}"]
 
 # print(commands[7])
 print(len(commands))
@@ -105,7 +110,7 @@ print(len(commands))
 '''
 Execute the commands in parallel
 '''
-max_processes =  20
+max_processes =  6
 processes = set()
 
 finished_commands = []

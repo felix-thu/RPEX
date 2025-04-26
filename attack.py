@@ -390,7 +390,7 @@ def attack_dataset(config, dataset, use_original=False):
 
     return dataset, attack_agent.attack_indexs,std
 
-def corrupt_trans(data,std,corruption_random=True):
+def corrupt_trans(data,std,corruption_random=True,corrupt_reward=False):
     # load original obs
     original_data = data.copy()
     scale = 1.0
@@ -399,8 +399,11 @@ def corrupt_trans(data,std,corruption_random=True):
 
     if corruption_random:
         # std = np.std(original_obs, axis=0, keepdims=True)
-        attack_data = original_data + scale * np.random.uniform(-1,1,size=original_data.shape)*std*is_corrupted
-
+        if corrupt_reward:
+            # is_corrupted = np.array(corruption < 0.5).astype(np.int32)
+            attack_data = np.random.uniform(-1,1,size=original_data.shape)*is_corrupted*30
+        else:
+            attack_data = original_data + scale * np.random.uniform(-1,1,size=original_data.shape)*std*is_corrupted
 
     else:
         raise NotImplementedError

@@ -94,9 +94,9 @@ def get_dataframe(directory):
 
     return df
 
-df = get_dataframe('./attack_online_results/')
+df = get_dataframe('./test')
 print(df)
 
 
-df.to_csv('attack_online_results.csv', index=False)
+df.to_csv('test_results.csv', index=False)
 

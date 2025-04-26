@@ -262,7 +262,9 @@ def main(args):
         state = env.reset()
 
         while not done:
+
             action = alg.select_action(torchify(state).to(DEFAULT_DEVICE)).detach().cpu().numpy()
+            
             if len(memory) > args.initial_collection_steps:
                 for i in range(args.updates_per_step):
                     if use_wandb:
@@ -284,11 +286,11 @@ def main(args):
             # corruprt data
             attacked_next_state = next_state
             if args.corrupt_reward:
-                reward_for_replay,_ = corrupt_trans(reward_for_replay, std)
+                reward_for_replay,_ = corrupt_trans(reward_for_replay, std,corrupt_reward=True)
             if args.corrupt_dynamics:
                 attacked_next_state,_ = corrupt_trans(next_state, 1) if args.normalize_states else corrupt_trans(next_state, std)
             if args.corrupt_obs:
-                state,_ = corrupt_trans(state, 1) if args.normalize_states else corrupt_trans(state, std)
+                state,_ = corrupt_trans(state, 1) if args.normalize_states else corrupt_trans(next_state, std)
             if args.corrupt_acts:
                 action,_ = corrupt_trans(action, std)
 
@@ -339,7 +341,7 @@ if __name__ == '__main__':
                         help='total number of env steps (default: 1000000)')
     parser.add_argument('--initial_collection_steps', type=int, default=5000, metavar='N',
                         help='Initial environmental steps before training starts (default: 5000)')
-    parser.add_argument('--updates_per_step', type=int, default=1, metavar='N',
+    parser.add_argument('--updates_per_step', type=int, default=4, metavar='N',
                         help='model updates per simulator step (default: 1)')
     parser.add_argument('--ckpt_path', default='./riql_results/halfcheetah-medium-replay-v2/offline-riql-attack-0-8da3/offline_ckpt',
                 help='path to the offline checkpoint')

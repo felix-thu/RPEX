@@ -20,6 +20,17 @@ wheels/
 .installed.cfg
 *.egg
 
+# IQL and RIQL offline results
+iql_offline_results/
+riql_offline_results/
+attack_online_results/
+cql_offline_results/
+wandb/
+sweeps_results.json
+motivation.py
+*.ipynb
+baseline_run.py
+get_o2o_res.py
 # Virtual Environment
 venv/
 env/
