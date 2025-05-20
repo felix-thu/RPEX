@@ -14,7 +14,6 @@ def extract_results(log_file):
     std = []
     with open(log_file, 'r') as file:
         for line in file:
-            # 匹配 'normalized return mean' 后的数值
             match1 = re.search(r"'normalized return mean'\s*:\s*([-+]?[0-9]*\.?[0-9]+)", line)
             match2 = re.search(r"'normalized return std'\s*:\s*([-+]?[0-9]*\.?[0-9]+)", line)
             if match1:
