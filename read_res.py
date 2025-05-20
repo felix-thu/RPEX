@@ -1,6 +1,3 @@
-'''
-Plot learning curves in multiple figures
-'''
 
 import re
 import matplotlib.pyplot as plt # type: ignore
