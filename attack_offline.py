@@ -6,6 +6,7 @@ import uuid
 from pex.algorithms.iql import IQL
 from pex.algorithms.aligniql import ALIGNIQL
 from pex.algorithms.riql import RIQL
+from pex.algorithms.iql_q_gradient import IQL_Q_Gradient
 from pex.networks.policy import GaussianPolicy, DeterministicPolicy
 from pex.networks.value_functions import DoubleCriticNetwork, ValueNetwork,QFunction,VectorizedQ
 from pex.utils.util import (
@@ -140,6 +141,22 @@ def main(args):
         target_update_rate=args.target_update_rate,
         discount=args.discount
         )
+    elif algorithm_option == "IQL_Q_GRADIENT":
+        with open(os.path.join(args.log_dir,f'{args.env_name}.json'), 'wt') as f:
+            json.dump(vars(args), f, indent=4)
+        iql = IQL_Q_Gradient(
+        critic=DoubleCriticNetwork(obs_dim, act_dim, hidden_dim=args.hidden_dim, n_hidden=args.hidden_num),
+        # dro_net = QFunction(obs_dim, act_dim, hidden_dim=args.hidden_dim, n_hidden=args.hidden_num),
+        vf=ValueNetwork(obs_dim, hidden_dim=args.hidden_dim, n_hidden=args.hidden_num),
+        policy=policy,
+        optimizer_ctor=lambda params: torch.optim.Adam(params, lr=args.learning_rate),
+        max_steps=args.num_steps,
+        tau=args.tau,
+        beta=args.beta,
+        # rho  = args.rho,
+        target_update_rate=args.target_update_rate,
+        discount=args.discount
+        )
     for step in trange(args.num_steps):
         if use_wandb:
             log_dict = iql.update(**sample_batch(dataset, args.batch_size))
@@ -197,8 +214,8 @@ if __name__ == '__main__':
     parser.add_argument('--corrupt_acts', action='store_true', default=False)
     parser.add_argument('--corrupt_obs', action='store_true', default=False)
     parser.add_argument('--corruption_mode', type=str, default='random')
-    parser.add_argument('--corruption_range', type=float, default=0.5)
-    parser.add_argument('--corruption_rate', type=float, default=0.5)
+    parser.add_argument('--corruption_range', type=float, default=1.0)
+    parser.add_argument('--corruption_rate', type=float, default=0.3)
     
     
     args = parser.parse_args()

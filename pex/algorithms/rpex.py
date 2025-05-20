@@ -122,6 +122,7 @@ class RPEX2(IQL):
         v = self.vf(observations)
         adv = target_q.detach() - v
         exp_adv = torch.exp(self.beta * adv.detach()).clamp(max=EXP_ADV_MAX)
+        # exp_adv =torch.exp(-self.beta * torch.square(adv).detach())
         policy_out = self.policy(observations)
         
         if isinstance(policy_out, torch.distributions.Distribution):
@@ -245,6 +246,7 @@ class RPEX(RIQL):
         v = self.vf(observations)
         adv = target_q.detach() - v
         exp_adv = torch.exp(self.beta * adv.detach()).clamp(max=EXP_ADV_MAX)
+        # exp_adv = torch.exp(-self.beta * torch.square(adv).detach())+ 0.01*torch.exp(self.beta * adv.detach()).clamp(max=EXP_ADV_MAX)
         policy_out = self.policy(observations)
         
         if isinstance(policy_out, torch.distributions.Distribution):
@@ -253,7 +255,6 @@ class RPEX(RIQL):
             bc_losses = torch.sum((policy_out - actions) ** 2, dim=-1)
         else:
             raise NotImplementedError
-
 
         policy_loss = torch.mean(exp_adv * bc_losses)
         self.policy_optimizer.zero_grad(set_to_none=True)

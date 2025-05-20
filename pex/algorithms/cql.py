@@ -17,7 +17,8 @@ import torch.nn.functional as F
 import wandb
 from tqdm import trange
 from attack import attack_dataset
-
+import logging
+from rich.pretty import pretty_repr
 TensorBatch = List[torch.Tensor]
 
 def asdict(config):
@@ -31,7 +32,7 @@ def asdict(config):
 @dataclass
 class TrainConfig:
     # Experiment
-    num_epochs: int = 2000   
+    num_epochs: int = 1000   
     num_updates_on_epoch: int = 1000
     eval_episodes: int = 10 
     eval_every: int = 10  
@@ -853,6 +854,16 @@ def train(config: TrainConfig):
         os.makedirs(config.checkpoints_path, exist_ok=True)
         with open(os.path.join(config.checkpoints_path, "config.yaml"), "w") as f:
             pyrallis.dump(config, f)
+            
+        logging.root.handlers = []
+        logging.basicConfig(
+                    format='%(asctime)s %(levelname)s-%(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                        handlers=[
+            logging.FileHandler(os.path.join(TrainConfig.checkpoints_path,'result.log')),
+            logging.StreamHandler()
+        ],level=logging.INFO,
+                    )
 
     critic_1 = FullyConnectedQFunction(state_dim, action_dim, config.orthogonal_init).to(
         config.device
@@ -910,7 +921,7 @@ def train(config: TrainConfig):
         trainer.load_state_dict(torch.load(policy_file))
         actor = trainer.actor
 
-    wandb_init(asdict(config))
+    # wandb_init(asdict(config))
 
 
     total_updates = 0.0
@@ -919,8 +930,9 @@ def train(config: TrainConfig):
             batch = replay_buffer.sample(config.batch_size)
             batch = [b.to(config.device) for b in batch]
             log_dict = trainer.train(batch)
-            if total_updates % config.log_every == 0:
-                wandb.log({"epoch": epoch, **log_dict})
+            # if total_updates % config.log_every == 0:
+            #     # wandb.log({"epoch": epoch, **log_dict})
+            #     logging.info(pretty_repr(log_dict))
             total_updates += 1
 
         # Evaluate episode
@@ -941,9 +953,14 @@ def train(config: TrainConfig):
             normalized_score = env.get_normalized_score(eval_scores) * 100.0
             eval_log["eval/normalized_score_mean"] = np.mean(normalized_score)
             eval_log["eval/normalized_score_std"] = np.std(normalized_score)
-            wandb.log(eval_log)
-
-    wandb.finish()
+            # wandb.log(eval_log)
+            logging.info(pretty_repr(eval_log))
+        # save the model every 1000 epochs
+        if (epoch+1) % 1000 == 0:
+            torch.save(trainer.state_dict(), os.path.join(config.checkpoints_path, f"cql_{config.env_name}_{epoch}.pth"))
+    # save the last model
+    torch.save(trainer.state_dict(), os.path.join(config.checkpoints_path, f"cql_{config.env_name}_{epoch}.pth"))
+    # wandb.finish()
 
 
 if __name__ == "__main__":
@@ -956,11 +973,13 @@ if __name__ == "__main__":
     parser.add_argument('--corrupt_acts', action='store_true', default=False)
     parser.add_argument('--corrupt_obs', action='store_true', default=False)
     parser.add_argument('--corruption_mode', type=str, default='random')
-    parser.add_argument('--corruption_range', type=float, default=0.0)
-    parser.add_argument('--corruption_rate', type=float, default=0.0)
+    parser.add_argument('--corruption_range', type=float, default=1.0)
+    parser.add_argument('--corruption_rate', type=float, default=0.3)
     parser.add_argument('--checkpoints_path', type=str, default='./cql_offline_results')
+    parser.add_argument('--device_number', type=int, default=0)
     args = parser.parse_args()
     print(args)
+    torch.cuda.set_device(args.device_number)
 
     ### modify config
     TrainConfig.env_name = args.env_name
@@ -973,7 +992,8 @@ if __name__ == "__main__":
     TrainConfig.corruption_range = args.corruption_range
     TrainConfig.corruption_rate = args.corruption_rate
     TrainConfig.checkpoints_path = args.checkpoints_path
-
+    TrainConfig.device_number = args.device_number
+    
     if TrainConfig.corrupt_reward:
         group_name_center = 'reward' 
     elif TrainConfig.corrupt_dynamics:
@@ -989,7 +1009,9 @@ if __name__ == "__main__":
     TrainConfig.group = TrainConfig.group + '-{}'.format(group_name_center) + '_{}'.format(TrainConfig.env_name.split('-')[0])
     TrainConfig.name = "IQL_corrupt{}_{}_baseline_seed{}".format(TrainConfig.corruption_range, TrainConfig.corruption_rate, TrainConfig.train_seed)
     TrainConfig.name = f"{TrainConfig.name}-{TrainConfig.env_name}-{str(uuid.uuid4())[:8]}"
+
     if TrainConfig.checkpoints_path is not None:
         TrainConfig.checkpoints_path = os.path.join(TrainConfig.checkpoints_path, TrainConfig.group, TrainConfig.name)
     
+
     train(TrainConfig)

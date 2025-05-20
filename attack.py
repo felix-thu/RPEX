@@ -23,6 +23,81 @@ dataset_path = "./adversarial_data/"
 
 
 
+
+def adversarial_attack(original, std, obs,act,corruption_tag,config,actor,critic,scale=1.0):
+    original_torch = torch.from_numpy(original).to(config.device).view(1,-1)
+    std_torch = torch.from_numpy(std).to(config.device).view(1,-1)
+    obs_torch = torch.from_numpy(obs).to(config.device).view(1,-1)
+    act_torch = torch.from_numpy(act).to(config.device).view(1,-1)
+    # load model 
+    # corruption_agent = 'EDAC'
+    # model_path = MODEL_PATH[corruption_agent] + config.env_name + '/2999.pt'
+    # state_dict = torch.load(model_path, map_location=config.device)
+    
+    # assert corruption_agent == "EDAC"
+    # from EDAC import Actor, VectorizedCritic
+
+    # actor = (
+    #     Actor(
+    #         config.state_dim,
+    #         config.action_dim,
+    #         hidden_dim=256,
+    #         max_action=config.max_action,
+    #     )
+    #     .to(config.device)
+    #     .eval()
+    # )
+    # critic = (
+    #     VectorizedCritic(config.state_dim, config.action_dim, num_critics=10, hidden_dim=256)
+    #     .to(config.device)
+    #     .eval()
+    # )
+    # actor.load_state_dict(state_dict["actor"])
+    # critic.load_state_dict(state_dict["critic"])
+    # print(f"Load model from {model_path}")
+    
+    para =2* scale* std_torch * (torch.rand(original_torch.shape, generator=torch.Generator()).to(config.device) - 0.5)
+
+    
+    for _ in range(2):
+        para = torch.nn.Parameter(para.clone(), requires_grad=True)
+        optimizer = torch.optim.Adam([para], lr=0.1 * scale)
+        if corruption_tag == 'observations':
+            noised_obs = original_torch + para * std_torch
+            qvalue = critic(noised_obs.float(), act_torch.float())
+            loss = qvalue.mean()
+        elif corruption_tag == 'actions':
+            noised_act = original_torch + para * std_torch
+            qvalue = critic(obs_torch.float(), noised_act.float())
+            loss = qvalue.mean()
+        elif corruption_tag == 'next_observations':
+            noised_obs = original_torch + para * std_torch
+            action = actor(noised_obs.float())
+            # print(action)
+            # print(noised_obs.shape)
+            qvalue = critic(noised_obs.float(), action[0])
+            loss = qvalue.mean()
+        else:
+            raise NotImplementedError
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        para = torch.clamp(para, -scale, scale).detach()
+        
+    para = para * std_torch
+    # del actor
+    # del critic
+    # torch.cuda.empty_cache()
+    noise = para.cpu().numpy()
+    if corruption_tag == 'observations' or corruption_tag == 'next_observations':
+        attack_data = noise + original_torch.cpu().numpy()
+    elif corruption_tag == 'actions':
+        attack_data = noise + original_torch.cpu().numpy()
+    else:
+        raise NotImplementedError
+        
+    return attack_data
+
 class Attack:
     def __init__(
         self,
@@ -199,6 +274,7 @@ class Attack:
 
             pointer += number
         return attack_data
+    
 
     
     def corrupt_obs(self, dataset):
@@ -229,6 +305,7 @@ class Attack:
     def corrupt_act(self, dataset):
         # load original act
         original_act = self.dataset[self.corruption_tag][self.attack_indexs].copy()
+        # print(original_act.shape)
 
         if self.corruption_random:
             std = np.std(self.dataset[self.corruption_tag], axis=0, keepdims=True)
@@ -390,23 +467,29 @@ def attack_dataset(config, dataset, use_original=False):
 
     return dataset, attack_agent.attack_indexs,std
 
-def corrupt_trans(data,std,corruption_random=True,corrupt_reward=False):
+def corrupt_trans(data,std,obs,act,actor,critic,corruption_random=True,corrupt_reward=False,corruption_tag=None,config=None):
     # load original obs
     original_data = data.copy()
-    scale = 1.0
+    scale = config.corruption_range
     corruption = np.random.uniform(0,1)
-    is_corrupted = np.array(corruption < 0.5).astype(np.int32)  # Convert boolean to NumPy integer
+    is_corrupted = np.array(corruption < config.corruption_rate).astype(np.int32)  # Convert boolean to NumPy integer
+
 
     if corruption_random:
-        # std = np.std(original_obs, axis=0, keepdims=True)
+        # print("corruption_random")
         if corrupt_reward:
-            # is_corrupted = np.array(corruption < 0.5).astype(np.int32)
-            attack_data = np.random.uniform(-1,1,size=original_data.shape)*is_corrupted*30
+            # is_corrupted = np.array(corruption < 0.3).astype(np.int32)
+            attack_data = original_data*(1-is_corrupted) + np.random.uniform(-1,1,size=original_data.shape)*is_corrupted*30
         else:
             attack_data = original_data + scale * np.random.uniform(-1,1,size=original_data.shape)*std*is_corrupted
-
     else:
-        raise NotImplementedError
-        
+        # print("corruption_adversarial")
+        if corrupt_reward:
+            attack_data = original_data*(1-is_corrupted) + np.random.uniform(-1,1,size=original_data.shape)*is_corrupted
+        else:
+            if is_corrupted == 1:
+                attack_data = adversarial_attack(original_data,std,obs,act,corruption_tag,config,actor,critic,scale)
+            else:
+                attack_data = original_data
 
     return attack_data.squeeze(),is_corrupted

@@ -29,6 +29,9 @@ from rich.pretty import pretty_repr
 import json
 import wandb 
 
+MODEL_PATH = {
+    "EDAC": "./pretrained_model/EDAC/EDAC_baseline_seed0-",  ### to be added
+}
 use_wandb = False
 
 def main(args):
@@ -100,7 +103,44 @@ def main(args):
     # if torch.cuda.is_available():
     #     set_default_device()
 
+
+    
     action_space = env.action_space
+    args.max_action = float(env.action_space.high[0])
+    args.state_dim = obs_dim
+    args.action_dim = act_dim
+    
+    if args.corruption_type == "random":
+        online_corruption_random = True
+        actor = None
+        critic = None
+    else:
+        online_corruption_random = False
+        corruption_agent = 'EDAC'
+        model_path = MODEL_PATH[corruption_agent] + args.env_name + '/2999.pt'
+        state_dict = torch.load(model_path, map_location=args.device)
+        
+        assert corruption_agent == "EDAC"
+        from EDAC import Actor, VectorizedCritic
+
+        actor = (
+            Actor(
+                args.state_dim,
+                args.action_dim,
+                hidden_dim=256,
+                max_action=args.max_action,
+            )
+            .to(args.device)
+            .eval()
+        )
+        critic = (
+            VectorizedCritic(args.state_dim, args.action_dim, num_critics=10, hidden_dim=256)
+            .to(args.device)
+            .eval()
+        )
+        actor.load_state_dict(state_dict["actor"])
+        critic.load_state_dict(state_dict["critic"])
+    
     if args.deterministic_policy:
         policy = DeterministicPolicy(obs_dim, act_dim, max_action=float(env.action_space.high[0]))
         online_policy = GaussianPolicy(obs_dim, act_dim, hidden_dim=args.hidden_dim, n_hidden=args.hidden_num, action_space=action_space, scale_distribution=False, state_dependent_std=False)
@@ -185,7 +225,7 @@ def main(args):
         
     elif algorithm_option == "RIQLDIRECT":  # riql direct
         args = get_config(args)
-        double_buffer = True
+        double_buffer = False
         with open(os.path.join(args.log_dir,f'{args.env_name}.json'), 'wt') as f:
             json.dump(vars(args), f, indent=4)        
         assert args.ckpt_path, "need to provide a valid checkpoint path"
@@ -206,7 +246,7 @@ def main(args):
         
     elif algorithm_option == "RIQL": # riql pex
         args = get_config(args)
-        double_buffer = True
+        double_buffer = False
         with open(os.path.join(args.log_dir,f'{args.env_name}.json'), 'wt') as f:
             json.dump(vars(args), f, indent=4)        
         assert args.ckpt_path, "need to provide a valid checkpoint path"
@@ -228,7 +268,7 @@ def main(args):
     
     elif algorithm_option == "RPEX":
         args = get_config(args)
-        double_buffer = True
+        double_buffer = False
         with open(os.path.join(args.log_dir,f'{args.env_name}.json'), 'wt') as f:
             json.dump(vars(args), f, indent=4)        
         assert args.ckpt_path, "need to provide a valid checkpoint path"
@@ -286,14 +326,14 @@ def main(args):
             # corruprt data
             attacked_next_state = next_state
             if args.corrupt_reward:
-                reward_for_replay,_ = corrupt_trans(reward_for_replay, std,corrupt_reward=True)
+                reward_for_replay,_ = corrupt_trans(reward_for_replay, std,state,action,actor,critic,corruption_random=online_corruption_random,corrupt_reward=True,corruption_tag='rewards',config=args)
             if args.corrupt_dynamics:
-                attacked_next_state,_ = corrupt_trans(next_state, 1) if args.normalize_states else corrupt_trans(next_state, std)
+                attacked_next_state,_ = corrupt_trans(next_state, np.array([1.0]),state,action,actor,critic,corruption_random=online_corruption_random,corrupt_reward=False,corruption_tag='next_observations',config=args) 
             if args.corrupt_obs:
-                state,_ = corrupt_trans(state, 1) if args.normalize_states else corrupt_trans(next_state, std)
+                state,_ = corrupt_trans(state, np.array([1.0]),state,action,actor,critic,corruption_random=online_corruption_random,corrupt_reward=False,corruption_tag='observations',config=args) 
             if args.corrupt_acts:
-                action,_ = corrupt_trans(action, std)
-
+                action,_ = corrupt_trans(action, std,state,action,actor,critic,corruption_random=online_corruption_random,corrupt_reward=False,corruption_tag='actions',config=args)   
+                
             # memory.push(state, action, reward_for_replay, next_state, terminal)
             memory.push(state, action, reward_for_replay, attacked_next_state, terminal)            
             state = next_state
@@ -341,7 +381,7 @@ if __name__ == '__main__':
                         help='total number of env steps (default: 1000000)')
     parser.add_argument('--initial_collection_steps', type=int, default=5000, metavar='N',
                         help='Initial environmental steps before training starts (default: 5000)')
-    parser.add_argument('--updates_per_step', type=int, default=4, metavar='N',
+    parser.add_argument('--updates_per_step', type=int, default=1, metavar='N',
                         help='model updates per simulator step (default: 1)')
     parser.add_argument('--ckpt_path', default='./riql_results/halfcheetah-medium-replay-v2/offline-riql-attack-0-8da3/offline_ckpt',
                 help='path to the offline checkpoint')
@@ -368,8 +408,9 @@ if __name__ == '__main__':
     parser.add_argument('--corrupt_acts', action='store_true', default=False)
     parser.add_argument('--corrupt_obs', action='store_true', default=False)
     parser.add_argument('--corruption_mode', type=str, default='random')
+    parser.add_argument('--corruption_type', type=str, default='random')
     parser.add_argument('--corruption_range', type=float, default=1)
-    parser.add_argument('--corruption_rate', type=float, default=0.3)
+    parser.add_argument('--corruption_rate', type=float, default=0.5)
     
 
     args = parser.parse_args()

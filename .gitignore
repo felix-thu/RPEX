@@ -26,12 +26,53 @@ riql_offline_results/
 attack_online_results/
 cql_offline_results/
 wandb/
+utd_fake/
 sweeps_results.json
 motivation.py
 *.ipynb
 baseline_run.py
 get_o2o_res.py
+# data
+attack_s_r/
+adversarial_attack/
+maze_dataset_generator.py
+rpex_results/
+2utd_fake/
+ablation_buffer/
+aligniql_motivation/
+aligniql_motivation2/
+attack_iql_rpex_next_s/
+attack_iql/rpex_s_r/
+attack_iql_rpex_s_r/
+attack_s_test/
+experiments/
+iql_rpex_next_s/
+visualization_data/
+
+# files
+*.pdf
+*.png
+*.csv
+*.json
+*.pkl
+*.pt
+*.pth
+*.pkl.gz
+*.pkl.bz2
+
+
+# motivation
+run_vis.py
+vis.py
+read_res.py
+pr2.py
+pr3.py
+plot.py
+plot_utd.py
+plot*
+parallel_run.py
 # Virtual Environment
+src/
 venv/
 env/
 ENV/
@@ -51,7 +92,7 @@ venv.bak/
 
 # Jupyter Notebook
 .ipynb_checkpoints
-*.ipynb
+# *.ipynb
 
 # Logs
 *.log

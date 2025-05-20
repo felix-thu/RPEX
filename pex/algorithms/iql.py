@@ -16,8 +16,8 @@ def expectile_loss(diff, expectile):
     return (weight * (diff**2)).mean()
 
 class IQL(nn.Module):
-    def __init__(self, critic, vf, policy,online_policy, optimizer_ctor, max_steps,
-                 tau, beta, discount=0.99, target_update_rate=0.005, use_lr_scheduler=True):
+    def __init__(self, critic, vf, policy, optimizer_ctor, max_steps,
+                 tau, beta,online_policy=None, discount=0.99, target_update_rate=0.005, use_lr_scheduler=True):
         super().__init__()
         self.critic = critic.to(DEFAULT_DEVICE)
         self.target_critic = copy.deepcopy(critic).requires_grad_(False).to(DEFAULT_DEVICE)
