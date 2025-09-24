@@ -1,6 +1,6 @@
 # RPEX: Robust Policy Execution
 ![RPEX Architecture](rpex.png)
-This repository contains the official implementation of our NeurIPS 2025 submission titled "RPEX: Robust Policy Expansion for Offline-to-Online RL". 
+This repository contains the official implementation of our NeurIPS 2025 paper titled "RPEX: Robust Policy Expansion for Offline-to-Online RL". 
 
 ## Abstract
 
